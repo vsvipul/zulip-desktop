@@ -8,7 +8,7 @@ const escape = require('escape-html');
 
 require(__dirname + '/js/tray.js');
 const DomainUtil = require(__dirname + '/js/utils/domain-util.js');
-const WebView = require(__dirname + '/js/components/webview.js');
+// const WebView = require(__dirname + '/js/components/webview.js');
 const ServerTab = require(__dirname + '/js/components/server-tab.js');
 const FunctionalTab = require(__dirname + '/js/components/functional-tab.js');
 const ConfigUtil = require(__dirname + '/js/utils/config-util.js');
@@ -82,13 +82,13 @@ class ServerManagerView {
 
 			const proxyEnabled = ConfigUtil.getConfigItem('useManualProxy') || ConfigUtil.getConfigItem('useSystemProxy');
 			if (proxyEnabled) {
-				session.fromPartition('persist:webviewsession').setProxy({
+				session.fromPartition('persist:view').setProxy({
 					pacScript: ConfigUtil.getConfigItem('proxyPAC', ''),
 					proxyRules: ConfigUtil.getConfigItem('proxyRules', ''),
 					proxyBypassRules: ConfigUtil.getConfigItem('proxyBypass', '')
 				}, resolve);
 			} else {
-				session.fromPartition('persist:webviewsession').setProxy({
+				session.fromPartition('persist:view').setProxy({
 					pacScript: '',
 					proxyRules: '',
 					proxyBypassRules: ''
@@ -159,6 +159,7 @@ class ServerManagerView {
 
 	initTabs() {
 		const servers = DomainUtil.getDomains();
+		console.log(servers);
 		if (servers.length > 0) {
 			for (let i = 0; i < servers.length; i++) {
 				this.initServer(servers[i], i);
@@ -167,6 +168,8 @@ class ServerManagerView {
 			}
 			// Open last active tab
 			this.activateTab(ConfigUtil.getConfigItem('lastActiveTab'));
+			console.log('last active index select' + ConfigUtil.getConfigItem('lastActiveTab'));
+			ipcRenderer.send('view-select', ConfigUtil.getConfigItem('lastActiveTab'));
 			// Remove focus from the settings icon at sidebar bottom
 			this.$settingsButton.classList.remove('active');
 		} else {
@@ -186,30 +189,42 @@ class ServerManagerView {
 			tabIndex,
 			onHover: this.onHover.bind(this, index),
 			onHoverOut: this.onHoverOut.bind(this, index),
-			webview: new WebView({
-				$root: this.$webviewsContainer,
-				index,
-				tabIndex,
-				url: server.url,
-				role: 'server',
-				name: CommonUtil.decodeString(server.alias),
-				isActive: () => {
-					return index === this.activeTabIndex;
-				},
-				switchLoading: (loading, url) => {
-					if (!loading && this.loading[url]) {
-						this.loading[url] = false;
-					} else if (loading && !this.loading[url]) {
-						this.loading[url] = true;
-					}
-					this.showLoading(this.loading[this.tabs[this.activeTabIndex].webview.props.url]);
-				},
-				onNetworkError: this.openNetworkTroubleshooting.bind(this),
-				onTitleChange: this.updateBadge.bind(this),
-				nodeIntegration: false,
-				preload: true
-			})
+			// webview: new WebView({
+			// 	$root: this.$webviewsContainer,
+			// 	index,
+			// 	tabIndex,
+			// 	url: server.url,
+			// 	role: 'server',
+			// 	name: CommonUtil.decodeString(server.alias),
+			// 	isActive: () => {
+			// 		return index === this.activeTabIndex;
+			// 	},
+			// 	switchLoading: (loading, url) => {
+			// 		if (!loading && this.loading[url]) {
+			// 			this.loading[url] = false;
+			// 		} else if (loading && !this.loading[url]) {
+			// 			this.loading[url] = true;
+			// 		}
+			// 		this.showLoading(this.loading[this.tabs[this.activeTabIndex].webview.props.url]);
+			// 	},
+			// 	onNetworkError: this.openNetworkTroubleshooting.bind(this),
+			// 	onTitleChange: this.updateBadge.bind(this),
+			// 	nodeIntegration: false,
+			// 	preload: true
+			// })
 		}));
+
+		const props = {
+			index,
+			url: server.url,
+			role: 'server',
+			name: CommonUtil.decodeString(server.alias),
+			onNetworkError: this.openNetworkTroubleshooting.bind(this),
+			onTitleChange: this.updateBadge.bind(this),
+			nodeIntegration: false,
+			preload: true
+		};
+		ipcRenderer.send('view-create', props);
 		this.loading[server.url] = true;
 	}
 
@@ -238,7 +253,8 @@ class ServerManagerView {
 			ipcRenderer.send('forward-message', 'toggle-dnd', dndUtil.dnd, dndUtil.newSettings);
 		});
 		this.$reloadButton.addEventListener('click', () => {
-			this.tabs[this.activeTabIndex].webview.reload();
+			// this.tabs[this.activeTabIndex].webview.reload();
+			ipcRenderer.send('view-call-function', 'reload');
 		});
 		this.$addServerButton.addEventListener('click', () => {
 			this.openSettings('AddServer');
@@ -248,6 +264,7 @@ class ServerManagerView {
 		});
 		this.$backButton.addEventListener('click', () => {
 			this.tabs[this.activeTabIndex].webview.back();
+			ipcRenderer.send('view-call-function', 'back');
 		});
 
 		this.sidebarHoverEvent(this.$addServerButton, this.$addServerTooltip, true);
@@ -270,7 +287,7 @@ class ServerManagerView {
 	}
 
 	getCurrentActiveServer() {
-		return this.tabs[this.activeTabIndex].webview.props.url;
+		// return this.tabs[this.activeTabIndex].webview.props.url;
 	}
 
 	displayInitialCharLogo($img, index) {
@@ -352,30 +369,43 @@ class ServerManagerView {
 			tabIndex,
 			onClick: this.activateTab.bind(this, this.functionalTabs[tabProps.name]),
 			onDestroy: this.destroyTab.bind(this, tabProps.name, this.functionalTabs[tabProps.name]),
-			webview: new WebView({
-				$root: this.$webviewsContainer,
-				index: this.functionalTabs[tabProps.name],
-				tabIndex,
-				url: tabProps.url,
-				role: 'function',
-				name: tabProps.name,
-				isActive: () => {
-					return this.functionalTabs[tabProps.name] === this.activeTabIndex;
-				},
-				switchLoading: (loading, url) => {
-					if (!loading && this.loading[url]) {
-						this.loading[url] = false;
-					} else if (loading && !this.loading[url]) {
-						this.loading[url] = true;
-					}
-					this.showLoading(this.loading[this.tabs[this.activeTabIndex].webview.props.url]);
-				},
-				onNetworkError: this.openNetworkTroubleshooting.bind(this),
-				onTitleChange: this.updateBadge.bind(this),
-				nodeIntegration: true,
-				preload: false
-			})
+			// webview: new WebView({
+			// 	$root: this.$webviewsContainer,
+			// 	index: this.functionalTabs[tabProps.name],
+			// 	tabIndex,
+			// 	url: tabProps.url,
+			// 	role: 'function',
+			// 	name: tabProps.name,
+			// 	isActive: () => {
+			// 		return this.functionalTabs[tabProps.name] === this.activeTabIndex;
+			// 	},
+			// 	switchLoading: (loading, url) => {
+			// 		if (!loading && this.loading[url]) {
+			// 			this.loading[url] = false;
+			// 		} else if (loading && !this.loading[url]) {
+			// 			this.loading[url] = true;
+			// 		}
+			// 		this.showLoading(this.loading[this.tabs[this.activeTabIndex].webview.props.url]);
+			// 	},
+			// 	onNetworkError: this.openNetworkTroubleshooting.bind(this),
+			// 	onTitleChange: this.updateBadge.bind(this),
+			// 	nodeIntegration: true,
+			// 	preload: false
+			// })
 		}));
+
+		const props = {
+			index: this.functionalTabs[tabProps.name],
+			url: tabProps.url,
+			role: 'function',
+			name: tabProps.name,
+			onNetworkError: this.openNetworkTroubleshooting.bind(this),
+			onTitleChange: this.updateBadge.bind(this),
+			nodeIntegration: true,
+			preload: false
+		};
+
+		ipcRenderer.send('view-create', props);
 
 		// To show loading indicator the first time a functional tab is opened, indicator is
 		// closed when the functional tab DOM is ready, handled in webview.js
@@ -391,7 +421,8 @@ class ServerManagerView {
 			url: `file://${__dirname}/preference.html#${nav}`
 		});
 		this.$settingsButton.classList.add('active');
-		this.tabs[this.functionalTabs.Settings].webview.send('switch-settings-nav', nav);
+		// this.tabs[this.functionalTabs.Settings].webview.send('switch-settings-nav', nav);
+		ipcRenderer.send('forward-message-view', 'switch-settings-nav', nav);
 	}
 
 	openAbout() {
@@ -427,9 +458,9 @@ class ServerManagerView {
 			const proto = Object.create(Object.getPrototypeOf(tab));
 			const tabClone = Object.assign(proto, tab);
 
-			tabClone.webview = { props: {} };
-			tabClone.webview.props.name = tab.webview.props.name;
-			delete tabClone.props.webview;
+			// tabClone.webview = { props: {} };
+			// tabClone.webview.props.name = tab.webview.props.name;
+			// delete tabClone.props.webview;
 			tabs.push(tabClone);
 		});
 
@@ -453,15 +484,17 @@ class ServerManagerView {
 			}
 		}
 
-		try {
-			this.tabs[index].webview.canGoBackButton();
-		} catch (err) {
-		}
+		// try {
+		// 	this.tabs[index].webview.canGoBackButton();
+		// } catch (err) {
+		// }
 
 		this.activeTabIndex = index;
 		this.tabs[index].activate();
+		console.log('selecting view iwth index '+index);
+		ipcRenderer.send('view-select', index);
 
-		this.showLoading(this.loading[this.tabs[this.activeTabIndex].webview.props.url]);
+		// this.showLoading(this.loading[this.tabs[this.activeTabIndex].webview.props.url]);
 
 		ipcRenderer.send('update-menu', {
 			// JSON stringify this.tabs to avoid a crash
@@ -484,9 +517,9 @@ class ServerManagerView {
 	}
 
 	destroyTab(name, index) {
-		if (this.tabs[index].webview.loading) {
-			return;
-		}
+		// if (this.tabs[index].webview.loading) {
+		// 	return;
+		// }
 
 		this.tabs[index].destroy();
 
@@ -502,6 +535,7 @@ class ServerManagerView {
 	destroyView() {
 		// Show loading indicator
 		this.$webviewsContainer.classList.remove('loaded');
+		ipcRenderer.send('view-destroy-all');
 
 		// Clear global variables
 		this.activeTabIndex = -1;
@@ -544,12 +578,13 @@ class ServerManagerView {
 	}
 
 	updateGeneralSettings(setting, value) {
-		const selector = 'webview:not([class*=disabled])';
-		const webview = document.querySelector(selector);
-		if (webview) {
-			const webContents = webview.getWebContents();
-			webContents.send(setting, value);
-		}
+		// const selector = 'webview:not([class*=disabled])';
+		// const webview = document.querySelector(selector);
+		// if (webview) {
+		// 	const webContents = webview.getWebContents();
+		// 	webContents.send(setting, value);
+		// }
+		ipcRenderer.send('forward-message-view', setting, value);
 	}
 
 	toggleSidebar(show) {
@@ -558,6 +593,7 @@ class ServerManagerView {
 		} else {
 			this.$sidebar.classList.add('sidebar-hide');
 		}
+		ipcRenderer.send('toggle-sidebar');
 	}
 
 	// Toggles the dnd button icon.
@@ -600,9 +636,9 @@ class ServerManagerView {
 
 	registerIpcs() {
 		const webviewListeners = {
-			'webview-reload': 'reload',
+			// 'webview-reload': 'reload',
 			back: 'back',
-			focus: 'focus',
+			// focus: 'focus',
 			forward: 'forward',
 			zoomIn: 'zoomIn',
 			zoomOut: 'zoomOut',
@@ -614,10 +650,11 @@ class ServerManagerView {
 
 		for (const key in webviewListeners) {
 			ipcRenderer.on(key, () => {
-				const activeWebview = this.tabs[this.activeTabIndex].webview;
-				if (activeWebview) {
-					activeWebview[webviewListeners[key]]();
-				}
+				// const activeWebview = this.tabs[this.activeTabIndex].webview;
+				// if (activeWebview) {
+				// 	activeWebview[webviewListeners[key]]();
+				// }
+				ipcRenderer.send('view-call-function', webviewListeners[key]);
 			});
 		}
 
@@ -698,10 +735,11 @@ class ServerManagerView {
 		ipcRenderer.on('toggle-dnd', (event, state, newSettings) => {
 			this.toggleDNDButton(state);
 			ipcRenderer.send('forward-message', 'toggle-silent', newSettings.silent);
-			const selector = 'webview:not([class*=disabled])';
-			const webview = document.querySelector(selector);
-			const webContents = webview.getWebContents();
-			webContents.send('toggle-dnd', state, newSettings);
+			// const selector = 'webview:not([class*=disabled])';
+			// const webview = document.querySelector(selector);
+			// const webContents = webview.getWebContents();
+			// webContents.send('toggle-dnd', state, newSettings);
+			ipcRenderer.send('forward-message-view', 'toggle-dnd', state, newSettings);
 		});
 
 		ipcRenderer.on('update-realm-name', (event, serverURL, realmName) => {

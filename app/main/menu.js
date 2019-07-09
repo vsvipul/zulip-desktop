@@ -86,7 +86,7 @@ class AppMenu {
 			accelerator: process.platform === 'darwin' ? 'Alt+Command+I' : 'Ctrl+Shift+I',
 			click(item, focusedWindow) {
 				if (focusedWindow) {
-					focusedWindow.webContents.toggleDevTools();
+					focusedWindow.webContents.openDevTools({mode:'undocked'});
 				}
 			}
 		}, {
@@ -228,12 +228,12 @@ class AppMenu {
 			});
 			for (let i = 0; i < tabs.length; i++) {
 				// Do not add functional tab settings to list of windows in menu bar
-				if (tabs[i].props.role === 'function' && tabs[i].webview.props.name === 'Settings') {
+				if (tabs[i].props.role === 'function' && tabs[i].props.name === 'Settings') {
 					continue;
 				}
 
 				initialSubmenu.push({
-					label: tabs[i].webview.props.name,
+					label: tabs[i].props.name,
 					accelerator: tabs[i].props.role === 'function' ? '' : `${ShortcutKey} + ${tabs[i].props.index + 1}`,
 					checked: tabs[i].props.index === activeTabIndex,
 					click(item, focusedWindow) {

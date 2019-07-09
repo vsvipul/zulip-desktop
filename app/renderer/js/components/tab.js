@@ -27,12 +27,12 @@ class Tab extends BaseComponent {
 
 	activate() {
 		this.$el.classList.add('active');
-		this.webview.load();
+		// this.webview.load();
 	}
 
 	deactivate() {
 		this.$el.classList.remove('active');
-		this.webview.hide();
+		// this.webview.hide();
 	}
 
 	destroy() {

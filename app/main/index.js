@@ -10,12 +10,13 @@ const { appUpdater } = require('./autoupdater');
 
 const { setAutoLaunch } = require('./startup');
 
-const { app, ipcMain } = electron;
+const { app, ipcMain, BrowserView } = electron;
 
 const BadgeSettings = require('./../renderer/js/pages/preference/badge-settings.js');
 const ConfigUtil = require('./../renderer/js/utils/config-util.js');
 const ProxyUtil = require('./../renderer/js/utils/proxy-util.js');
 const { sentryInit } = require('./../renderer/js/utils/sentry-util.js');
+const ViewManager = require('./viewmanager.js');
 
 // Adds debug features like hotkeys for triggering dev tools and reload
 // in development mode
@@ -105,10 +106,12 @@ function createMainWindow() {
 
 	win.on('enter-full-screen', () => {
 		win.webContents.send('enter-fullscreen');
+		// ViewManager.toggleFullscreen(true);
 	});
 
 	win.on('leave-full-screen', () => {
 		win.webContents.send('leave-fullscreen');
+		// ViewManager.toggleFullscreen(false);
 	});
 
 	//  To destroy tray icon when navigate to a new URL
@@ -150,6 +153,13 @@ app.on('ready', () => {
 		tabs: []
 	});
 	mainWindow = createMainWindow();
+
+	// ViewManager.create(0, `file://${__dirname}/../renderer/preference.html#General`);
+	// // ViewManager.create(0, 'http://chat.zulip.org/');
+	// ViewManager.select(0);
+	// setTimeout(() => {
+	// 	ViewManager.destroy(0)
+	// }, 5000);
 
 	// Auto-hide menu bar on Windows + Linux
 	if (process.platform !== 'darwin') {
@@ -257,6 +267,10 @@ app.on('ready', () => {
 		page.send('toggle-autohide-menubar', showMenubar, true);
 	});
 
+	ipcMain.on('toggle-sidebar', () => {
+		ViewManager.fixBounds();
+	});
+
 	ipcMain.on('update-badge', (event, messageCount) => {
 		badgeCount = messageCount;
 		BadgeSettings.updateBadge(badgeCount, mainWindow);
@@ -275,7 +289,7 @@ app.on('ready', () => {
 		appMenu.setMenu(props);
 		const activeTab = props.tabs[props.activeTabIndex];
 		if (activeTab) {
-			mainWindow.setTitle(`Zulip - ${activeTab.webview.props.name}`);
+			mainWindow.setTitle(`Zulip - ${activeTab.props.name}`);
 		}
 	});
 
